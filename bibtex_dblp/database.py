@@ -47,14 +47,19 @@ def convert_dblp_entries(bib, bib_format=dblp_api.BibFormat.condensed):
         dblp_id = dblp_api.extract_dblp_id(entry)
         if dblp_id is not None:
             logging.debug("Found DBLP id '{}'".format(dblp_id))
-            result_dblp = dblp_api.get_bibtex(dblp_id, bib_format=bib_format)
+            try:
+                result_dblp = dblp_api.get_bibtex(dblp_id, bib_format=bib_format)
+            except dblp_api.InvalidDblpIdException as err:
+                logging.warning(str(err) + ". Skipping this entry.")
+                continue
+
             data = parse_bibtex(result_dblp)
             assert len(data.entries) <= 2 if bib_format is dblp_api.BibFormat.crossref else len(data.entries) == 1
             if entry_str not in data.entries:
                 # DBLP key is not used as bibtex key -> remember DBLP key
                 key = next(iter(data.entries))
                 new_entry = data.entries[key]
-                new_entry.fields['biburl'] = entry.fields['biburl']
+                new_entry.fields["biburl"] = entry.fields["biburl"]
                 bib.entries[entry_str] = new_entry
 
             else:
@@ -82,10 +87,10 @@ def search(bib, search_string):
     """
     results = []
     for _, entry in bib.entries.items():
-        if 'author' in entry.persons:
-            authors = entry.persons['author']
+        if "author" in entry.persons:
+            authors = entry.persons["author"]
             author_names = " and ".join([str(author) for author in authors])
-        elif 'organization' in entry.fields:
+        elif "organization" in entry.fields:
             author_names = str(entry.fields["organization"])
         else:
             author_names = ""
@@ -103,15 +108,15 @@ def print_entry(bib_entry):
     :param bib_entry: Pybtex entry.
     :return: String.
     """
-    if 'author' in bib_entry.persons:
-        authors = ", ".join([str(author) for author in bib_entry.persons['author']])
-    elif 'organization' in bib_entry.fields:
+    if "author" in bib_entry.persons:
+        authors = ", ".join([str(author) for author in bib_entry.persons["author"]])
+    elif "organization" in bib_entry.fields:
         authors = str(bib_entry.fields["organization"])
     else:
         authors = ""
     book = ""
-    if 'booktitle' in bib_entry.fields:
-        book = bib_entry.fields['booktitle']
-    if 'volume' in bib_entry.fields:
-        book += " ({})".format(bib_entry.fields['volume'])
-    return "{}:\n\t{} {} {}".format(authors, bib_entry.fields['title'], book, bib_entry.fields['year'])
+    if "booktitle" in bib_entry.fields:
+        book = bib_entry.fields["booktitle"]
+    if "volume" in bib_entry.fields:
+        book += " ({})".format(bib_entry.fields["volume"])
+    return "{}:\n\t{} {} {}".format(authors, bib_entry.fields["title"], book, bib_entry.fields["year"])

@@ -7,14 +7,19 @@ import bibtex_dblp.config as config
 import bibtex_dblp.dblp_data
 
 
+class InvalidDblpIdException(Exception):
+    pass
+
+
 class BibFormat(Enum):
     """
     Format of DBLP bibtex.
     """
-    condensed = 'condensed'
-    standard = 'standard'
-    crossref = 'crossref'
-    condensed_doi = 'condensed_doi'
+
+    condensed = "condensed"
+    standard = "standard"
+    crossref = "crossref"
+    condensed_doi = "condensed_doi"
 
     def bib_url(self):
         """
@@ -46,11 +51,8 @@ def perform_request(url, params=None, **kwargs):
     :raises: HTTPError if request was unsuccessful.
     """
     response = requests.get(url, params=params, **kwargs)
-    if response.status_code == 200:
-        return response
-    else:
-        response.raise_for_status()
-        return None
+    response.raise_for_status()
+    return response
 
 
 def extract_dblp_id(entry):
@@ -79,14 +81,20 @@ def get_bibtex(dblp_id, bib_format=BibFormat.condensed):
     :param bib_format: Format of bibtex export (see BibFormat).
     :return: Bibtex as binary string.
     """
-    resp = perform_request(config.DBLP_PUBLICATION_BIBTEX.format(key=dblp_id, bib_format=bib_format.bib_url()))
-    bibtex = resp.content.decode('utf-8')
+    try:
+        resp = perform_request(config.DBLP_PUBLICATION_BIBTEX.format(key=dblp_id, bib_format=bib_format.bib_url()))
+    except requests.exceptions.HTTPError as err:
+        if err.response.status_code == 404:
+            raise InvalidDblpIdException("Invalid DBLP id '{}'".format(dblp_id))
+        else:
+            raise err
+
+    bibtex = resp.content.decode("utf-8")
 
     if bib_format == BibFormat.condensed_doi:
         # Also get DOI and insert it into bibtex
-        resp = perform_request(
-            config.DBLP_PUBLICATION_BIBTEX.format(key=dblp_id, bib_format=BibFormat.standard.bib_url()))
-        lines = resp.content.decode('utf-8').split('\n')
+        resp = perform_request(config.DBLP_PUBLICATION_BIBTEX.format(key=dblp_id, bib_format=BibFormat.standard.bib_url()))
+        lines = resp.content.decode("utf-8").split("\n")
         keep_lines = [line for line in lines if line.startswith("  doi")]
         assert len(keep_lines) <= 1
         if keep_lines:
@@ -110,11 +118,7 @@ def search_publication(pub_query, max_search_results=config.MAX_SEARCH_RESULTS):
     :param max_search_results: Maximal number of search results to return.
     :return: Search results.
     """
-    parameters = dict(
-        q=pub_query,
-        format="json",
-        h=max_search_results
-    )
+    parameters = dict(q=pub_query, format="json", h=max_search_results)
 
     resp = perform_request(config.DBLP_PUBLICATION_SEARCH_URL, params=parameters)
     results = bibtex_dblp.dblp_data.DblpSearchResults(resp.json())
